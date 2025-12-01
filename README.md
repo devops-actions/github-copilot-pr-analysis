@@ -146,6 +146,7 @@ This is useful when you want to:
 | `output_format` | Output format for results: `json` or `csv` | No | `json` |
 | `analyze_all_repos` | Analyze all repositories for the user/organization | No | `true` |
 | `clean_cache` | Clean the cache and start with fresh data | No | `false` |
+| `skipped_orgs` | Organizations to skip during analysis. Multiline input with one entry per line. Supports simple format (skip entire org) or selective format (`org-name:include:repo1,repo2`) | No | `''` |
 
 ## Outputs
 
@@ -208,18 +209,30 @@ Your GitHub Personal Access Token needs the following permissions:
 
 ### Organization Filtering
 
-Create a `skipped_orgs.txt` file in your repository root to control which organizations/repositories to analyze:
+You can control which organizations and repositories to analyze using the `skipped_orgs` input. This is a multiline input where each line specifies an organization filtering rule:
 
+```yaml
+      - name: Run PR analysis with charts
+        uses: devops-actions/github-copilot-pr-analysis@v1
+        with:
+          github_token: ${{ secrets.GH_PAT }}
+          skipped_orgs: |
+            # Skip entire organization
+            unwanted-org
+            # Include only specific repos from an org
+            my-org:include:repo1,repo2,repo3
 ```
-# Skip entire organization
-unwanted-org
 
-# Include only specific repos from an org
-my-org:include:repo1,repo2,repo3
+#### Supported Formats
 
-# Exclude specific repos from an org
-another-org:exclude:archive-repo,old-repo
-```
+- **Simple format** - Skip entire organization: `org-name`
+- **Selective format** - Skip organization except for specific repositories: `org-name:include:repo1,repo2,repo3`
+
+Lines starting with `#` are treated as comments and ignored.
+
+#### Legacy File-Based Configuration
+
+For backwards compatibility, you can also create a `skipped_orgs.txt` file in your repository root. The file uses the same format as the `skipped_orgs` input. If both the input and file are present, the input takes precedence.
 
 ## Advanced Features
 

@@ -52,6 +52,10 @@ jobs:
           output_format: ${{ inputs.output_format || 'json' }}
           analyze_all_repos: 'true'
           clean_cache: ${{ inputs.clean_cache || 'false' }}
+          # Optional: Skip specific organizations or selectively include repos
+          # skipped_orgs: |
+          #   unwanted-org
+          #   partial-org:include:repo1,repo2
       
       - name: Upload analysis results
         uses: actions/upload-artifact@v4

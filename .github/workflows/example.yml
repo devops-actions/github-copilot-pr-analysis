@@ -1,0 +1,70 @@
+name: PR Analysis Example
+
+on:
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      output_format:
+        description: 'Output format (json or csv)'
+        required: false
+        default: 'json'
+        type: choice
+        options:
+          - json
+          - csv
+      clean_cache:
+        description: 'Clean cache and start fresh'
+        required: false
+        default: 'false'
+        type: boolean
+
+jobs:
+  analyze-prs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Validate GitHub token
+        run: |
+          if [ -z "${{ secrets.GH_PAT }}" ]; then
+            echo "::error::GH_PAT secret is not set. Please add a GitHub Personal Access Token to your repository secrets."
+            exit 1
+          fi
+      
+      - name: Restore HTTP cache
+        uses: actions/cache@v4
+        with:
+          path: .http_cache
+          key: http-cache-${{ github.run_id }}
+          restore-keys: |
+            http-cache-
+      
+      - name: Run PR analysis with charts
+        uses: devops-actions/github-copilot-pr-analysis@v1
+        with:
+          github_token: ${{ secrets.GH_PAT }}
+          output_format: ${{ inputs.output_format || 'json' }}
+          analyze_all_repos: 'true'
+          clean_cache: ${{ inputs.clean_cache || 'false' }}
+      
+      - name: Upload analysis results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pr-analysis-results-${{ github.run_number }}
+          path: report/pr_analysis_*
+          retention-days: 30
+      
+      - name: Display results summary
+        if: always()
+        run: |
+          echo "## Analysis Complete! 🎉" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Analysis results have been uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
+          echo "Check the charts and tables in the step summary above." >> $GITHUB_STEP_SUMMARY

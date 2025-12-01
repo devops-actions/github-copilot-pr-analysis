@@ -1,0 +1,40 @@
+name: 'PR Analysis'
+description: 'Run PR analysis to detect Copilot collaboration'
+inputs:
+  github_token:
+    description: 'GitHub token with repo and pull-requests read permissions'
+    required: true
+  output_format:
+    description: 'Output format (json or csv)'
+    required: false
+    default: 'json'
+  analyze_all_repos:
+    description: 'Analyze all repositories'
+    required: false
+    default: 'true'
+  clean_cache:
+    description: 'Clean the cache and start fresh'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Run PR analysis
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        OUTPUT_FORMAT: ${{ inputs.output_format }}
+        ANALYZE_ALL_REPOS: ${{ inputs.analyze_all_repos }}
+        CLEAN_CACHE: ${{ inputs.clean_cache }}
+      run: npm run analyze

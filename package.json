@@ -1,0 +1,45 @@
+{
+  "name": "github-copilot-pr-analysis",
+  "version": "1.0.0",
+  "description": "GitHub Action to analyze GitHub PR's for Copilot usage",
+  "main": "src/index.js",
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/devops-actions/github-copilot-pr-analysis.git"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "analyze": "node src/index.js --mode=analyze",
+    "charts": "node src/index.js --mode=charts",
+    "test": "node --experimental-vm-modules node_modules/.bin/jest",
+    "test:watch": "jest --watch",
+    "lint": "eslint src/ tests/"
+  },
+  "keywords": [
+    "github",
+    "pull-request",
+    "analysis",
+    "copilot",
+    "automation",
+    "github-actions"
+  ],
+  "author": "devops-actions",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "node-cache": "^5.1.2",
+    "commander": "^11.1.0",
+    "csv-writer": "^1.6.0",
+    "glob": "^10.5.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "eslint": "^8.57.0",
+    "@babel/preset-env": "^7.23.0",
+    "babel-jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

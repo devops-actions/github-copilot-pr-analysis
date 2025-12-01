@@ -1,0 +1,26 @@
+name: 'Generate Mermaid Charts'
+description: 'Generate Mermaid charts from PR analysis results'
+inputs:
+  github_token:
+    description: 'GitHub token (optional, may be needed for some operations)'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Generate Mermaid Charts
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: npm run charts

@@ -20,15 +20,27 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Run PR analysis
-      uses: ./analyze
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
       with:
-        github_token: ${{ inputs.github_token }}
-        output_format: ${{ inputs.output_format }}
-        analyze_all_repos: ${{ inputs.analyze_all_repos }}
-        clean_cache: ${{ inputs.clean_cache }}
+        node-version: '18'
+        cache: 'npm'
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Run PR analysis
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+        OUTPUT_FORMAT: ${{ inputs.output_format }}
+        ANALYZE_ALL_REPOS: ${{ inputs.analyze_all_repos }}
+        CLEAN_CACHE: ${{ inputs.clean_cache }}
+      run: npm run analyze
 
     - name: Generate Mermaid Charts
-      uses: ./charts
-      with:
-        github_token: ${{ inputs.github_token }}
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: npm run charts

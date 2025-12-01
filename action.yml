@@ -1,0 +1,34 @@
+name: 'PR Analysis with Charts'
+description: 'Run PR analysis and generate Mermaid charts'
+inputs:
+  github_token:
+    description: 'GitHub token with repo and pull-requests read permissions'
+    required: true
+  output_format:
+    description: 'Output format (json or csv)'
+    required: false
+    default: 'json'
+  analyze_all_repos:
+    description: 'Analyze all repositories'
+    required: false
+    default: 'true'
+  clean_cache:
+    description: 'Clean the cache and start fresh'
+    required: false
+    default: 'false'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Run PR analysis
+      uses: ./analyze
+      with:
+        github_token: ${{ inputs.github_token }}
+        output_format: ${{ inputs.output_format }}
+        analyze_all_repos: ${{ inputs.analyze_all_repos }}
+        clean_cache: ${{ inputs.clean_cache }}
+
+    - name: Generate Mermaid Charts
+      uses: ./charts
+      with:
+        github_token: ${{ inputs.github_token }}

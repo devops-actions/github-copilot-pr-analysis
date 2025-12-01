@@ -25,10 +25,12 @@ runs:
       with:
         node-version: '18'
         cache: 'npm'
+        cache-dependency-path: ${{ github.action_path }}/package-lock.json
 
     - name: Install dependencies
       shell: bash
       run: npm ci
+      working-directory: ${{ github.action_path }}
 
     - name: Run PR analysis
       shell: bash
@@ -38,9 +40,11 @@ runs:
         ANALYZE_ALL_REPOS: ${{ inputs.analyze_all_repos }}
         CLEAN_CACHE: ${{ inputs.clean_cache }}
       run: npm run analyze
+      working-directory: ${{ github.action_path }}
 
     - name: Generate Mermaid Charts
       shell: bash
       env:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: npm run charts
+      working-directory: ${{ github.action_path }}

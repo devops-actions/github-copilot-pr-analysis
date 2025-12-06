@@ -19,6 +19,9 @@ on:
         default: 'false'
         type: boolean
 
+permissions:
+  contents: read
+
 jobs:
   analyze-prs:
     runs-on: ubuntu-latest

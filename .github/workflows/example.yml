@@ -1,3 +1,5 @@
+name: PR Analysis Example
+on:
   schedule:
     # Run every Monday at 9 AM UTC
     - cron: '0 9 * * 1'
@@ -65,28 +67,3 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Analysis results have been uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
           echo "Check the charts and tables in the step summary above." >> $GITHUB_STEP_SUMMARY
-
-
-name: PR Analysis Example
-on:
-  schedule:
-    # Run every Monday at 9 AM UTC
-    - cron: '0 9 * * 1'
-  workflow_dispatch:
-    inputs:
-      output_format:
-        description: 'Output format (json or csv)'
-        required: false
-        default: 'json'
-        type: choice
-        options:
-          - json
-          - csv
-      clean_cache:
-        description: 'Clean cache and start fresh'
-        required: false
-        default: 'false'
-        type: boolean
-
-permissions:
-  contents: read

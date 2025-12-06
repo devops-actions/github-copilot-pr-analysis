@@ -16,6 +16,10 @@ inputs:
     description: 'Clean the cache and start fresh'
     required: false
     default: 'false'
+  skipped_orgs:
+    description: 'Organizations to skip during analysis. Multiline input with one entry per line. Supports simple format (skip entire org) or selective format (org-name:include:repo1,repo2)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -39,6 +43,7 @@ runs:
         OUTPUT_FORMAT: ${{ inputs.output_format }}
         ANALYZE_ALL_REPOS: ${{ inputs.analyze_all_repos }}
         CLEAN_CACHE: ${{ inputs.clean_cache }}
+        SKIPPED_ORGS: ${{ inputs.skipped_orgs }}
       run: npm run analyze
       working-directory: ${{ github.action_path }}
 

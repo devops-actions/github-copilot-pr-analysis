@@ -332,7 +332,8 @@ export class GitHubPRAnalyzer {
     }
 
     /**
-     * Load the organization filtering configuration from file.
+     * Load the organization filtering configuration from environment variable or file.
+     * Priority: SKIPPED_ORGS environment variable > skipped_orgs.txt file
      */
     async loadSkippedOrganizations() {
         const config = {
@@ -340,27 +341,39 @@ export class GitHubPRAnalyzer {
             partiallySkipped: {}
         };
         
-        try {
-            const configFile = path.join(process.cwd(), 'skipped_orgs.txt');
-            const content = await fs.readFile(configFile, 'utf8');
-            
-            for (const line of content.split('\n')) {
-                const trimmedLine = line.trim();
-                if (!trimmedLine || trimmedLine.startsWith('#')) {
-                    continue;
-                }
-                
-                if (trimmedLine.includes(':include:')) {
-                    const [orgName, , repoList] = trimmedLine.split(':');
-                    const repos = repoList.split(',').map(r => r.trim());
-                    config.partiallySkipped[orgName] = repos;
-                } else {
-                    config.fullySkipped.push(trimmedLine);
-                }
+        let content = '';
+        
+        // Check environment variable first (from workflow input)
+        if (process.env.SKIPPED_ORGS) {
+            content = process.env.SKIPPED_ORGS;
+            console.log('Loading skipped organizations from SKIPPED_ORGS environment variable');
+        } else {
+            // Fallback to file-based configuration
+            try {
+                const configFile = path.join(process.cwd(), 'skipped_orgs.txt');
+                content = await fs.readFile(configFile, 'utf8');
+                console.log('Loading skipped organizations from skipped_orgs.txt file');
+            } catch (error) {
+                // File doesn't exist or other error, use empty config
+                console.log(`Note: Could not load skipped organizations config: ${error.message}`);
+                return config;
             }
-        } catch (error) {
-            // File doesn't exist or other error, use empty config
-            console.log(`Note: Could not load skipped organizations config: ${error.message}`);
+        }
+        
+        // Parse the content (same format for both input and file)
+        for (const line of content.split('\n')) {
+            const trimmedLine = line.trim();
+            if (!trimmedLine || trimmedLine.startsWith('#')) {
+                continue;
+            }
+            
+            if (trimmedLine.includes(':include:')) {
+                const [orgName, , repoList] = trimmedLine.split(':');
+                const repos = repoList.split(',').map(r => r.trim());
+                config.partiallySkipped[orgName] = repos;
+            } else {
+                config.fullySkipped.push(trimmedLine);
+            }
         }
         
         return config;

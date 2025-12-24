@@ -60,7 +60,7 @@ jobs:
           #   partial-org:include:repo1,repo2
       
       - name: Upload analysis results
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v6.0.0
         if: always()
         with:
           name: pr-analysis-results-${{ github.run_number }}

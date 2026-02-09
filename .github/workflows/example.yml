@@ -51,7 +51,7 @@ jobs:
             http-cache-
       
       - name: Run PR analysis with charts
-        uses: devops-actions/github-copilot-pr-analysis@v0.0.3
+        uses: devops-actions/github-copilot-pr-analysis@v0.0.4
         with:
           github_token: ${{ secrets.GH_PAT }}
           output_format: ${{ inputs.output_format || 'json' }}

@@ -73,7 +73,9 @@ jobs:
       - name: Display results summary
         if: always()
         run: |
-          echo "## Analysis Complete! 🎉" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Analysis results have been uploaded as artifacts." >> $GITHUB_STEP_SUMMARY
-          echo "Check the charts and tables in the step summary above." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## Analysis Complete! 🎉"
+            echo ""
+            echo "Analysis results have been uploaded as artifacts."
+            echo "Check the charts and tables in the step summary above."
+          } >> "$GITHUB_STEP_SUMMARY"

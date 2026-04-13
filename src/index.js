@@ -90,12 +90,27 @@ async function runAnalysis(options) {
         console.log('\n=== SUMMARY ===');
         console.log(`Total repositories analyzed: [${results.totalRepositories}]`);
         console.log(`Total PRs analyzed: [${results.totalPRs}]`);
+        console.log(`AI-assisted PRs (total): [${results.totalAIAssistedPRs || results.totalCopilotPRs}]`);
         console.log(`Copilot-assisted PRs: [${results.totalCopilotPRs}]`);
+        if (results.totalClaudePRs > 0) {
+            console.log(`Claude-assisted PRs: [${results.totalClaudePRs}]`);
+        }
+        if (results.totalCodexPRs > 0) {
+            console.log(`Codex-assisted PRs: [${results.totalCodexPRs}]`);
+        }
         console.log(`Copilot-triggered Actions runs: [${results.totalActionsRuns}]`);
         console.log(`Copilot Actions minutes used: [${results.totalActionsMinutes}]`);
         if (results.totalPRs > 0) {
             const overallCopilotPercentage = Math.round(results.totalCopilotPRs / results.totalPRs * 100 * 100) / 100;
             console.log(`Overall Copilot Usage on PRs: [${overallCopilotPercentage}]%`);
+            if (results.totalClaudePRs > 0) {
+                const overallClaudePercentage = Math.round(results.totalClaudePRs / results.totalPRs * 100 * 100) / 100;
+                console.log(`Overall Claude Usage on PRs: [${overallClaudePercentage}]%`);
+            }
+            if (results.totalCodexPRs > 0) {
+                const overallCodexPercentage = Math.round(results.totalCodexPRs / results.totalPRs * 100 * 100) / 100;
+                console.log(`Overall Codex Usage on PRs: [${overallCodexPercentage}]%`);
+            }
         }
         
         console.log('\n=== WEEKLY BREAKDOWN ===');

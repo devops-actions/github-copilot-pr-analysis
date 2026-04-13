@@ -1,4 +1,5 @@
-import { generateSummaryStats, generateRepositoryDataTable, generateActionsMinutesChart, generateActionsMinutesDataTable, formatNumberMetric } from '../src/mermaid-generator.js';
+import { jest } from '@jest/globals';
+import { generateSummaryStats, generateRepositoryDataTable, generateActionsMinutesChart, generateActionsMinutesDataTable, formatNumberMetric, writeToStepSummary } from '../src/mermaid-generator.js';
 
 describe('Step Summary Integration', () => {
     describe('formatNumberMetric', () => {
@@ -37,6 +38,12 @@ describe('Step Summary Integration', () => {
                 totalCopilotPRs: 30,
                 totalCopilotReviewPRs: 20,
                 totalCopilotAgentPRs: 10,
+                totalClaudePRs: 5,
+                totalClaudeReviewPRs: 2,
+                totalClaudeAgentPRs: 3,
+                totalCodexPRs: 3,
+                totalCodexReviewPRs: 1,
+                totalCodexAgentPRs: 2,
                 totalActionsRuns: 15,
                 totalActionsMinutes: 120,
                 weeklyAnalysis: {}
@@ -53,6 +60,16 @@ describe('Step Summary Integration', () => {
             expect(summary).toContain('**Copilot-Assisted PRs**: 30');
             expect(summary).toContain('**Copilot Review PRs**: 20');
             expect(summary).toContain('**Copilot Agent PRs**: 10');
+
+            // Verify Claude data is included
+            expect(summary).toContain('**Claude-Assisted PRs**: 5');
+            expect(summary).toContain('**Claude Review PRs**: 2');
+            expect(summary).toContain('**Claude Agent PRs**: 3');
+
+            // Verify Codex data is included
+            expect(summary).toContain('**Codex-Assisted PRs**: 3');
+            expect(summary).toContain('**Codex Review PRs**: 1');
+            expect(summary).toContain('**Codex Agent PRs**: 2');
         });
 
         test('should handle missing Actions data gracefully', () => {
@@ -287,6 +304,38 @@ describe('Step Summary Integration', () => {
             // Verify metric notation with dot as thousand separator
             expect(table).toContain('| 2023-W01 | 810 | 101.891 |');
             expect(table).toContain('| **Total** | **810** | **101.891** |');
+        });
+    });
+
+    describe('writeToStepSummary - output_to_step_summary control', () => {
+        const originalEnv = process.env;
+
+        afterEach(() => {
+            process.env = { ...originalEnv };
+        });
+
+        test('should skip writing when OUTPUT_TO_STEP_SUMMARY is false', async () => {
+            process.env.OUTPUT_TO_STEP_SUMMARY = 'false';
+            process.env.GITHUB_STEP_SUMMARY = undefined;
+            // Capture console output to verify nothing was written
+            const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+            
+            await writeToStepSummary('test content');
+            
+            expect(consoleSpy).not.toHaveBeenCalledWith('test content');
+            consoleSpy.mockRestore();
+        });
+
+        test('should write to console when GITHUB_STEP_SUMMARY is not set and OUTPUT_TO_STEP_SUMMARY is not false', async () => {
+            delete process.env.OUTPUT_TO_STEP_SUMMARY;
+            delete process.env.GITHUB_STEP_SUMMARY;
+            
+            const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+            
+            await writeToStepSummary('step summary content');
+            
+            expect(consoleSpy).toHaveBeenCalledWith('step summary content');
+            consoleSpy.mockRestore();
         });
     });
 });

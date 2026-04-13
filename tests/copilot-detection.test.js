@@ -70,8 +70,8 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         const result = await analyzer.detectCopilotCollaboration(prData);
         
         // Based on the priority in detectCopilotCollaboration:
-        // 1. Copilot bot as author -> 'agent' (this should match first)
-        expect(result).toBe('agent');
+        // 1. Copilot bot as author -> { tool: 'copilot', type: 'agent' } (this should match first)
+        expect(result).toEqual({ tool: 'copilot', type: 'agent' });
     });
 
     test('should detect Copilot as author as agent', async () => {
@@ -93,7 +93,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('agent');
+        expect(result).toEqual({ tool: 'copilot', type: 'agent' });
     });
 
     test('should detect copilot-pull-request-reviewer[bot] as review', async () => {
@@ -119,7 +119,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('review');
+        expect(result).toEqual({ tool: 'copilot', type: 'review' });
     });
 
     test('should detect Copilot as assignee as agent', async () => {
@@ -141,7 +141,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('agent');
+        expect(result).toEqual({ tool: 'copilot', type: 'agent' });
     });
 
     test('should detect Copilot as reviewer as review', async () => {
@@ -167,7 +167,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('review');
+        expect(result).toEqual({ tool: 'copilot', type: 'review' });
     });
 
     test('should return none for PR without Copilot', async () => {
@@ -189,7 +189,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('none');
+        expect(result).toEqual({ tool: 'none', type: 'none' });
     });
 
     test('should handle edge case reviewer names with copilot and review', async () => {
@@ -215,7 +215,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('review');
+        expect(result).toEqual({ tool: 'copilot', type: 'review' });
     });
 
     test('should not detect usernames containing copilot but not review as reviewers', async () => {
@@ -241,7 +241,7 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
         jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
         
         const result = await analyzer.detectCopilotCollaboration(prData);
-        expect(result).toBe('none');
+        expect(result).toEqual({ tool: 'none', type: 'none' });
     });
 
     test('should detect dependabot PRs', () => {
@@ -265,6 +265,290 @@ describe('GitHubPRAnalyzer - Copilot Detection', () => {
     });
     
     test('should analyze commit counts correctly', () => {
+        const commits = [
+            {
+                commit: {
+                    author: { name: 'rajbos' },
+                    committer: { name: 'GitHub' },
+                    message: 'Add new feature'
+                },
+                author: { login: 'rajbos' }
+            },
+            {
+                commit: {
+                    author: { name: 'GitHub Copilot' },
+                    committer: { name: 'GitHub' },
+                    message: 'Fix bug with copilot assistance'
+                },
+                author: { login: 'rajbos' }
+            },
+            {
+                commit: {
+                    author: { name: 'rajbos' },
+                    committer: { name: 'GitHub' },
+                    message: 'Update README\n\nCo-authored-by: GitHub Copilot <noreply@github.com>'
+                },
+                author: { login: 'rajbos' }
+            },
+            {
+                commit: {
+                    author: { name: 'rajbos' },
+                    committer: { name: 'GitHub' },
+                    message: 'Regular commit without assistance'
+                },
+                author: { login: 'rajbos' }
+            }
+        ];
+        
+        const result = analyzer.analyzeCommitCounts(commits);
+        
+        expect(result.totalCommits).toBe(4);
+        expect(result.copilotCommits).toBe(2); // One with Copilot author, one with co-authored-by
+        expect(result.userCommits).toBe(2); // Two regular commits
+        expect(result.claudeCommits).toBe(0);
+        expect(result.codexCommits).toBe(0);
+    });
+    
+    test('should handle empty commit list', () => {
+        const result = analyzer.analyzeCommitCounts([]);
+        
+        expect(result.totalCommits).toBe(0);
+        expect(result.userCommits).toBe(0);
+        expect(result.copilotCommits).toBe(0);
+        expect(result.claudeCommits).toBe(0);
+        expect(result.codexCommits).toBe(0);
+    });
+    
+    test('should detect copilot commits by author name', () => {
+        const commits = [
+            {
+                commit: {
+                    author: { name: 'copilot[bot]' },
+                    committer: { name: 'GitHub' },
+                    message: 'Generated code'
+                },
+                author: { login: 'copilot[bot]' }
+            }
+        ];
+        
+        const result = analyzer.analyzeCommitCounts(commits);
+        
+        expect(result.totalCommits).toBe(1);
+        expect(result.copilotCommits).toBe(1);
+        expect(result.userCommits).toBe(0);
+    });
+
+    test('should detect Claude commits by co-authored-by trailer', () => {
+        const commits = [
+            {
+                commit: {
+                    author: { name: 'rajbos' },
+                    committer: { name: 'GitHub' },
+                    message: 'Add feature\n\nCo-authored-by: Claude <claude@anthropic.com>'
+                },
+                author: { login: 'rajbos' }
+            }
+        ];
+        
+        const result = analyzer.analyzeCommitCounts(commits);
+        
+        expect(result.totalCommits).toBe(1);
+        expect(result.claudeCommits).toBe(1);
+        expect(result.copilotCommits).toBe(0);
+        expect(result.userCommits).toBe(0);
+    });
+
+    test('should detect Codex commits by co-authored-by trailer', () => {
+        const commits = [
+            {
+                commit: {
+                    author: { name: 'rajbos' },
+                    committer: { name: 'GitHub' },
+                    message: 'Add feature\n\nCo-authored-by: Codex <codex@openai.com>'
+                },
+                author: { login: 'rajbos' }
+            }
+        ];
+        
+        const result = analyzer.analyzeCommitCounts(commits);
+        
+        expect(result.totalCommits).toBe(1);
+        expect(result.codexCommits).toBe(1);
+        expect(result.copilotCommits).toBe(0);
+        expect(result.userCommits).toBe(0);
+    });
+
+    test('should detect Claude[bot] as PR author (agent)', async () => {
+        const prData = {
+            number: 10,
+            title: 'Fix authentication bug',
+            body: 'Fixed the login issue.',
+            user: { login: 'claude[bot]', type: 'Bot' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'claude', type: 'agent' });
+    });
+
+    test('should detect claude-ai[bot] as PR assignee (agent)', async () => {
+        const prData = {
+            number: 11,
+            title: 'Refactor module',
+            body: 'Cleaned up the code.',
+            user: { login: 'human_user', type: 'User' },
+            assignees: [{ login: 'claude-ai[bot]', type: 'Bot' }],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'claude', type: 'agent' });
+    });
+
+    test('should detect claude[bot] as reviewer (review)', async () => {
+        const prData = {
+            number: 12,
+            title: 'Add new endpoint',
+            body: 'Adds /health endpoint.',
+            user: { login: 'human_user', type: 'User' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        const mockReviews = [
+            { user: { login: 'claude[bot]', type: 'Bot' } }
+        ];
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue(mockReviews);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'claude', type: 'review' });
+    });
+
+    test('should detect Claude via co-authored-by commit trailer (agent)', async () => {
+        const prData = {
+            number: 13,
+            title: 'Update dependencies',
+            body: 'Updated packages.',
+            user: { login: 'human_user', type: 'User' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        const mockCommits = [
+            {
+                commit: {
+                    message: 'Update deps\n\nCo-authored-by: Claude <noreply@anthropic.com>',
+                    author: { name: 'human_user' },
+                    committer: { name: 'GitHub' }
+                },
+                author: { login: 'human_user' }
+            }
+        ];
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue(mockCommits);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'claude', type: 'agent' });
+    });
+
+    test('should detect codex[bot] as PR author (agent)', async () => {
+        const prData = {
+            number: 14,
+            title: 'Implement sorting algorithm',
+            body: 'Added quicksort.',
+            user: { login: 'codex[bot]', type: 'Bot' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'codex', type: 'agent' });
+    });
+
+    test('should detect Codex via co-authored-by commit trailer (agent)', async () => {
+        const prData = {
+            number: 15,
+            title: 'Add tests',
+            body: 'Added unit tests.',
+            user: { login: 'human_user', type: 'User' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        const mockCommits = [
+            {
+                commit: {
+                    message: 'Add tests\n\nCo-authored-by: Codex <noreply@openai.com>',
+                    author: { name: 'human_user' },
+                    committer: { name: 'GitHub' }
+                },
+                author: { login: 'human_user' }
+            }
+        ];
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue(mockCommits);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'codex', type: 'agent' });
+    });
+
+    test('should not detect a human user named claude as Claude bot', async () => {
+        const prData = {
+            number: 16,
+            title: 'Fix null pointer',
+            body: 'Fixes issue.',
+            user: { login: 'claude-smith', type: 'User' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'none', type: 'none' });
+    });
+
+    test('should not false-positive on PR title containing "claude" without bot evidence', async () => {
+        const prData = {
+            number: 17,
+            title: 'Integrate Claude API for chatbot',
+            body: 'Added Claude Sonnet integration.',
+            user: { login: 'human_user', type: 'User' },
+            assignees: [],
+            requested_reviewers: [],
+            base: { repo: { full_name: 'test/repo' } }
+        };
+
+        jest.spyOn(analyzer, 'getPRReviews').mockResolvedValue([]);
+        jest.spyOn(analyzer, 'getPRCommits').mockResolvedValue([]);
+
+        const result = await analyzer.detectCopilotCollaboration(prData);
+        expect(result).toEqual({ tool: 'none', type: 'none' });
+    });
+    
+    test('should analyze line changes correctly', () => {
         const commits = [
             {
                 commit: {

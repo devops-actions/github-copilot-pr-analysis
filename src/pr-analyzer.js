@@ -519,46 +519,55 @@ export class GitHubPRAnalyzer {
     }
 
     /**
-     * Analyze commits in a PR to count commits by user vs Copilot.
+     * Analyze commits in a PR to count commits by user vs AI tool.
      */
     analyzeCommitCounts(commits) {
         let totalCommits = commits.length;
         let userCommits = 0;
         let copilotCommits = 0;
+        let claudeCommits = 0;
+        let codexCommits = 0;
         
         for (const commit of commits) {
-            const author = commit.commit?.author?.name || '';
-            const committer = commit.commit?.committer?.name || '';
+            const author = (commit.commit?.author?.name || '').toLowerCase();
+            const committer = (commit.commit?.committer?.name || '').toLowerCase();
+            const authorLogin = (commit.author?.login || '').toLowerCase();
             const message = (commit.commit?.message || '').toLowerCase();
             
-            // Check if this is a Copilot-assisted commit
             const isCopilotCommit = 
-                // Co-authored by Copilot
-                message.includes('co-authored-by:') && message.includes('copilot') ||
-                // Commit by Copilot
-                author.toLowerCase().includes('copilot') ||
-                committer.toLowerCase().includes('copilot') ||
-                // Commit message mentions Copilot
-                message.includes('copilot');
+                (message.includes('co-authored-by:') && message.includes('copilot')) ||
+                author.includes('copilot') ||
+                committer.includes('copilot') ||
+                authorLogin.includes('copilot');
+
+            // Strong-evidence detection: co-author trailer or bot login (not broad name matching)
+            const isClaudeCommit = !isCopilotCommit && (
+                (message.includes('co-authored-by:') && message.includes('claude')) ||
+                (authorLogin.includes('claude') && authorLogin.includes('[bot]'))
+            );
+
+            const isCodexCommit = !isCopilotCommit && !isClaudeCommit && (
+                (message.includes('co-authored-by:') && message.includes('codex')) ||
+                (authorLogin.includes('codex') && authorLogin.includes('[bot]'))
+            );
             
             if (isCopilotCommit) {
                 copilotCommits++;
+            } else if (isClaudeCommit) {
+                claudeCommits++;
+            } else if (isCodexCommit) {
+                codexCommits++;
             } else {
-                // Check if commit is by the analyzed user
-                const commitAuthor = commit.author?.login || author;
-                if (commitAuthor === this.owner || author.includes(this.owner)) {
-                    userCommits++;
-                } else {
-                    // Count as user commit if not explicitly Copilot-related
-                    userCommits++;
-                }
+                userCommits++;
             }
         }
         
         return {
             totalCommits,
             userCommits,
-            copilotCommits
+            copilotCommits,
+            claudeCommits,
+            codexCommits
         };
     }
 
@@ -590,46 +599,81 @@ export class GitHubPRAnalyzer {
     }
 
     /**
-     * Detect GitHub Copilot collaboration and categorize by assistance type.
+     * Detect AI agent collaboration and categorize by tool and assistance type.
+     * Returns { tool: 'copilot'|'claude'|'codex'|'none', type: 'agent'|'review'|'none' }
      */
     async detectCopilotCollaboration(pr) {
         const title = (pr.title || '').toLowerCase();
         const body = (pr.body || '').toLowerCase();
-        
-        // Priority 1: Check if author is Copilot (highest priority)
-        if (pr.user && pr.user.login && pr.user.login.toLowerCase() === 'copilot') {
-            return 'agent';
+
+        // Helpers: strong-evidence bot identity checks (bot username or [bot] suffix)
+        const isClaudeLogin = (login) => {
+            const l = login.toLowerCase();
+            return l === 'claude' || (l.includes('claude') && l.includes('[bot]'));
+        };
+        const isCodexLogin = (login) => {
+            const l = login.toLowerCase();
+            return l === 'codex' || (l.includes('codex') && l.includes('[bot]'));
+        };
+
+        // Priority 1: Check if author is a known AI bot (highest priority)
+        if (pr.user && pr.user.login) {
+            const authorLogin = pr.user.login.toLowerCase();
+            if (authorLogin === 'copilot') {
+                return { tool: 'copilot', type: 'agent' };
+            }
+            if (isClaudeLogin(pr.user.login)) {
+                return { tool: 'claude', type: 'agent' };
+            }
+            if (isCodexLogin(pr.user.login)) {
+                return { tool: 'codex', type: 'agent' };
+            }
         }
         
-        // Priority 2: Check assignees for Copilot
+        // Priority 2: Check assignees for known AI bots
         if (pr.assignees && Array.isArray(pr.assignees)) {
             for (const assignee of pr.assignees) {
-                if (assignee.login && assignee.login.toLowerCase() === 'copilot') {
-                    return 'agent';
+                if (assignee.login) {
+                    const assigneeLogin = assignee.login.toLowerCase();
+                    if (assigneeLogin === 'copilot') {
+                        return { tool: 'copilot', type: 'agent' };
+                    }
+                    if (isClaudeLogin(assignee.login)) {
+                        return { tool: 'claude', type: 'agent' };
+                    }
+                    if (isCodexLogin(assignee.login)) {
+                        return { tool: 'codex', type: 'agent' };
+                    }
                 }
             }
         }
         
-        // Priority 3: Check reviewers for Copilot-related bots
+        // Priority 3: Check reviewers for AI-related bots
         try {
             const reviews = await this.getPRReviews(pr.base.repo.full_name, pr.number);
             for (const review of reviews) {
                 if (review.user && review.user.login) {
                     const reviewerLogin = review.user.login.toLowerCase();
                     
-                    // Check for specific Copilot reviewer bot
+                    // Copilot reviewer detection
                     if (reviewerLogin === 'copilot-pull-request-reviewer[bot]') {
-                        return 'review';
+                        return { tool: 'copilot', type: 'review' };
                     }
-                    
-                    // Check for general Copilot reviewer patterns
                     if (reviewerLogin.includes('copilot') && reviewerLogin.includes('review')) {
-                        return 'review';
+                        return { tool: 'copilot', type: 'review' };
                     }
-                    
-                    // Check for Copilot as a reviewer
                     if (reviewerLogin === 'copilot') {
-                        return 'review';
+                        return { tool: 'copilot', type: 'review' };
+                    }
+
+                    // Claude reviewer detection
+                    if (isClaudeLogin(review.user.login)) {
+                        return { tool: 'claude', type: 'review' };
+                    }
+
+                    // Codex reviewer detection
+                    if (isCodexLogin(review.user.login)) {
+                        return { tool: 'codex', type: 'review' };
                     }
                 }
             }
@@ -637,32 +681,40 @@ export class GitHubPRAnalyzer {
             console.log(`Warning: Could not fetch reviews for PR #${pr.number}: ${error.message}`);
         }
         
-        // Priority 4: Check commits for Copilot collaboration
+        // Priority 4: Check commits for AI co-author trailers
         try {
             const commits = await this.getPRCommits(pr.base.repo.full_name, pr.number);
             for (const commit of commits) {
                 const message = (commit.commit.message || '').toLowerCase();
                 
-                // Check for co-authored-by with Copilot
+                // Copilot co-author or mention
                 if (message.includes('co-authored-by:') && message.includes('copilot')) {
-                    return 'agent';
+                    return { tool: 'copilot', type: 'agent' };
                 }
-                
-                // Check for Copilot in commit message with context
                 if (message.includes('copilot')) {
                     const reviewPatterns = ['review', 'feedback', 'suggestion', 'comment', 'approve'];
                     if (reviewPatterns.some(pattern => message.includes(pattern))) {
-                        return 'review';
+                        return { tool: 'copilot', type: 'review' };
                     } else {
-                        return 'agent';
+                        return { tool: 'copilot', type: 'agent' };
                     }
+                }
+
+                // Claude co-author trailer (strong evidence only)
+                if (message.includes('co-authored-by:') && message.includes('claude')) {
+                    return { tool: 'claude', type: 'agent' };
+                }
+
+                // Codex co-author trailer (strong evidence only)
+                if (message.includes('co-authored-by:') && message.includes('codex')) {
+                    return { tool: 'codex', type: 'agent' };
                 }
             }
         } catch (error) {
             console.log(`Warning: Could not fetch commits for PR #${pr.number}: ${error.message}`);
         }
         
-        // Priority 5: Check title/body for Copilot keywords
+        // Priority 5: Check title/body for Copilot keywords (Copilot only – avoids false positives for Claude/Codex)
         const copilotKeywords = ['copilot', 'co-pilot', 'github copilot', 'ai-assisted', 'ai assisted'];
         const reviewPatterns = ['review', 'feedback', 'suggestion', 'comment', 'approve'];
         const agentPatterns = ['generate', 'create', 'implement', 'code', 'develop', 'write'];
@@ -672,18 +724,16 @@ export class GitHubPRAnalyzer {
         );
         
         if (copilotMentioned) {
-            // Determine if it's review or agent based on context
             if (reviewPatterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
-                return 'review';
+                return { tool: 'copilot', type: 'review' };
             } else if (agentPatterns.some(pattern => title.includes(pattern) || body.includes(pattern))) {
-                return 'agent';
+                return { tool: 'copilot', type: 'agent' };
             } else {
-                // Default to agent if Copilot mentioned but no specific context
-                return 'agent';
+                return { tool: 'copilot', type: 'agent' };
             }
         }
         
-        return 'none';
+        return { tool: 'none', type: 'none' };
     }
 
     /**
@@ -740,6 +790,13 @@ export class GitHubPRAnalyzer {
         let totalCopilotPRs = 0;
         let totalCopilotReviewPRs = 0;
         let totalCopilotAgentPRs = 0;
+        let totalClaudePRs = 0;
+        let totalClaudeReviewPRs = 0;
+        let totalClaudeAgentPRs = 0;
+        let totalCodexPRs = 0;
+        let totalCodexReviewPRs = 0;
+        let totalCodexAgentPRs = 0;
+        let totalAIAssistedPRs = 0;
         let totalDependabotPRs = 0;
         let totalRepositories = 0;
         
@@ -833,6 +890,13 @@ export class GitHubPRAnalyzer {
                             copilotAssistedPRs: 0,
                             copilotReviewPRs: 0,
                             copilotAgentPRs: 0,
+                            claudeAssistedPRs: 0,
+                            claudeReviewPRs: 0,
+                            claudeAgentPRs: 0,
+                            codexAssistedPRs: 0,
+                            codexReviewPRs: 0,
+                            codexAgentPRs: 0,
+                            aiAssistedPRs: 0,
                             collaborators: new Set(),
                             repositories: new Set(),
                             pullRequests: []
@@ -873,33 +937,61 @@ export class GitHubPRAnalyzer {
 
                     weeklyData[weekKey].repositories.add(maskedRepoName);
 
-                    // Detect Copilot collaboration
-                    const copilotType = await this.detectCopilotCollaboration(pr);
-                    
-                    let copilotAssisted = false;
-                    if (copilotType === 'review') {
-                        weeklyData[weekKey].copilotReviewPRs++;
-                        totalCopilotReviewPRs++;
-                        copilotAssisted = true;
-                    } else if (copilotType === 'agent') {
-                        weeklyData[weekKey].copilotAgentPRs++;
-                        totalCopilotAgentPRs++;
-                        copilotAssisted = true;
+                    // Detect AI agent collaboration
+                    const aiCollaboration = await this.detectCopilotCollaboration(pr);
+                    const { tool: aiTool, type: aiType } = aiCollaboration;
+                    const aiAssisted = aiType !== 'none';
+                    const copilotAssisted = aiAssisted && aiTool === 'copilot';
+
+                    if (aiType === 'review') {
+                        if (aiTool === 'copilot') {
+                            weeklyData[weekKey].copilotReviewPRs++;
+                            totalCopilotReviewPRs++;
+                        } else if (aiTool === 'claude') {
+                            weeklyData[weekKey].claudeReviewPRs++;
+                            totalClaudeReviewPRs++;
+                        } else if (aiTool === 'codex') {
+                            weeklyData[weekKey].codexReviewPRs++;
+                            totalCodexReviewPRs++;
+                        }
+                    } else if (aiType === 'agent') {
+                        if (aiTool === 'copilot') {
+                            weeklyData[weekKey].copilotAgentPRs++;
+                            totalCopilotAgentPRs++;
+                        } else if (aiTool === 'claude') {
+                            weeklyData[weekKey].claudeAgentPRs++;
+                            totalClaudeAgentPRs++;
+                        } else if (aiTool === 'codex') {
+                            weeklyData[weekKey].codexAgentPRs++;
+                            totalCodexAgentPRs++;
+                        }
                     }
                     
                     if (copilotAssisted) {
                         weeklyData[weekKey].copilotAssistedPRs++;
                         totalCopilotPRs++;
                     }
+                    if (aiTool === 'claude') {
+                        weeklyData[weekKey].claudeAssistedPRs++;
+                        totalClaudePRs++;
+                    }
+                    if (aiTool === 'codex') {
+                        weeklyData[weekKey].codexAssistedPRs++;
+                        totalCodexPRs++;
+                    }
+                    if (aiAssisted) {
+                        weeklyData[weekKey].aiAssistedPRs++;
+                        totalAIAssistedPRs++;
+                    }
                     
-                    // Analyze commit counts for Copilot PRs
+                    // Analyze commit counts for AI-assisted PRs
                     let commitCounts = null;
-                    if (copilotAssisted) {
+                    if (aiAssisted) {
                         try {
                             const commits = await this.getPRCommits(pr.base.repo.full_name, pr.number);
                             commitCounts = this.analyzeCommitCounts(commits);
                         } catch (error) {
-                            console.log(`Warning: Could not analyze commits for Copilot PR #${pr.number}: ${error.message}`);
+                            console.log(`Warning: Could not analyze commits for AI-assisted PR #${pr.number}: ${error.message}`);
                         }
                     }
                     
@@ -920,7 +1012,10 @@ export class GitHubPRAnalyzer {
                         repository: maskedRepoName,
                         createdAt: pr.created_at,
                         copilotAssisted: copilotAssisted,
-                        copilotType: copilotType,
+                        copilotType: copilotAssisted ? aiType : undefined,
+                        aiAssisted: aiAssisted,
+                        aiTool: aiTool,
+                        aiType: aiType,
                         dependabotPr: false, // Always false since we exclude Dependabot PRs
                         url: pr.html_url,
                         collaborators: new Set([
@@ -983,6 +1078,13 @@ export class GitHubPRAnalyzer {
                                     copilotAssistedPRs: 0,
                                     copilotReviewPRs: 0,
                                     copilotAgentPRs: 0,
+                                    claudeAssistedPRs: 0,
+                                    claudeReviewPRs: 0,
+                                    claudeAgentPRs: 0,
+                                    codexAssistedPRs: 0,
+                                    codexReviewPRs: 0,
+                                    codexAgentPRs: 0,
+                                    aiAssistedPRs: 0,
                                     collaborators: new Set(),
                                     repositories: new Set(),
                                     pullRequests: [],
@@ -1034,7 +1136,10 @@ export class GitHubPRAnalyzer {
         console.log('\nAnalysis complete:');
         console.log(`- Total PRs analyzed: ${totalPRs}`);
         console.log(`- Dependabot PRs excluded: ${totalDependabotPRs}`);
-        console.log(`- Copilot-assisted PRs: ${totalCopilotPRs}`);
+        console.log(`- AI-assisted PRs (total): ${totalAIAssistedPRs}`);
+        console.log(`  - Copilot: ${totalCopilotPRs}`);
+        if (totalClaudePRs > 0) console.log(`  - Claude: ${totalClaudePRs}`);
+        if (totalCodexPRs > 0) console.log(`  - Codex: ${totalCodexPRs}`);
         console.log(`- Repositories analyzed: ${totalRepositories}`);
         console.log(`- Copilot-triggered Actions runs: ${totalActionsRuns}`);
         console.log(`- Copilot Actions minutes used: ${totalActionsMinutes}`);
@@ -1045,6 +1150,13 @@ export class GitHubPRAnalyzer {
             const copilotPercentage = data.totalPRs > 0 ? (data.copilotAssistedPRs / data.totalPRs * 100) : 0;
             const copilotReviewPercentage = data.totalPRs > 0 ? (data.copilotReviewPRs / data.totalPRs * 100) : 0;
             const copilotAgentPercentage = data.totalPRs > 0 ? (data.copilotAgentPRs / data.totalPRs * 100) : 0;
+            const claudePercentage = data.totalPRs > 0 ? ((data.claudeAssistedPRs || 0) / data.totalPRs * 100) : 0;
+            const claudeReviewPercentage = data.totalPRs > 0 ? ((data.claudeReviewPRs || 0) / data.totalPRs * 100) : 0;
+            const claudeAgentPercentage = data.totalPRs > 0 ? ((data.claudeAgentPRs || 0) / data.totalPRs * 100) : 0;
+            const codexPercentage = data.totalPRs > 0 ? ((data.codexAssistedPRs || 0) / data.totalPRs * 100) : 0;
+            const codexReviewPercentage = data.totalPRs > 0 ? ((data.codexReviewPRs || 0) / data.totalPRs * 100) : 0;
+            const codexAgentPercentage = data.totalPRs > 0 ? ((data.codexAgentPRs || 0) / data.totalPRs * 100) : 0;
+            const aiPercentage = data.totalPRs > 0 ? ((data.aiAssistedPRs || 0) / data.totalPRs * 100) : 0;
             
             finalWeeklyData[weekKey] = {
                 totalPRs: data.totalPRs,
@@ -1054,6 +1166,20 @@ export class GitHubPRAnalyzer {
                 copilotPercentage: Math.round(copilotPercentage * 100) / 100,
                 copilotReviewPercentage: Math.round(copilotReviewPercentage * 100) / 100,
                 copilotAgentPercentage: Math.round(copilotAgentPercentage * 100) / 100,
+                claudeAssistedPRs: data.claudeAssistedPRs || 0,
+                claudeReviewPRs: data.claudeReviewPRs || 0,
+                claudeAgentPRs: data.claudeAgentPRs || 0,
+                claudePercentage: Math.round(claudePercentage * 100) / 100,
+                claudeReviewPercentage: Math.round(claudeReviewPercentage * 100) / 100,
+                claudeAgentPercentage: Math.round(claudeAgentPercentage * 100) / 100,
+                codexAssistedPRs: data.codexAssistedPRs || 0,
+                codexReviewPRs: data.codexReviewPRs || 0,
+                codexAgentPRs: data.codexAgentPRs || 0,
+                codexPercentage: Math.round(codexPercentage * 100) / 100,
+                codexReviewPercentage: Math.round(codexReviewPercentage * 100) / 100,
+                codexAgentPercentage: Math.round(codexAgentPercentage * 100) / 100,
+                aiAssistedPRs: data.aiAssistedPRs || 0,
+                aiPercentage: Math.round(aiPercentage * 100) / 100,
                 uniqueCollaborators: data.collaborators.size,
                 collaborators: Array.from(data.collaborators),
                 repositories: Array.from(data.repositories),
@@ -1076,6 +1202,13 @@ export class GitHubPRAnalyzer {
             totalCopilotPRs: totalCopilotPRs,
             totalCopilotReviewPRs: totalCopilotReviewPRs,
             totalCopilotAgentPRs: totalCopilotAgentPRs,
+            totalClaudePRs: totalClaudePRs,
+            totalClaudeReviewPRs: totalClaudeReviewPRs,
+            totalClaudeAgentPRs: totalClaudeAgentPRs,
+            totalCodexPRs: totalCodexPRs,
+            totalCodexReviewPRs: totalCodexReviewPRs,
+            totalCodexAgentPRs: totalCodexAgentPRs,
+            totalAIAssistedPRs: totalAIAssistedPRs,
             totalDependabotPRs: totalDependabotPRs,
             totalRepositories: totalRepositories,
             totalActionsMinutes: totalActionsMinutes,
@@ -1109,7 +1242,7 @@ export class GitHubPRAnalyzer {
             if (weekData.pullRequests && weekData.pullRequests.length > 0) {
                 for (const pr of weekData.pullRequests) {
                     const prLink = `[#${pr.number} ${pr.title}](${pr.url})`;
-                    const copilotType = pr.copilotAssisted ? pr.copilotType : 'none';
+                    const aiDisplay = pr.aiAssisted ? `${pr.aiTool}-${pr.aiType}` : 'none';
                     
                     // Calculate line changes
                     const linesChanged = pr.lineChanges ? 
@@ -1122,7 +1255,7 @@ export class GitHubPRAnalyzer {
                     // Get action minutes if available (this might need to be added to the data structure)
                     const actionMinutes = pr.actionMinutes || 'n/a';
                     
-                    textContent += `| ${week} | ${copilotType} | ${prLink} | ${commentsCount} | ${linesChanged} | ${actionMinutes} |\n`;
+                    textContent += `| ${week} | ${aiDisplay} | ${prLink} | ${commentsCount} | ${linesChanged} | ${actionMinutes} |\n`;
                 }
             }
         }
@@ -1423,7 +1556,7 @@ export class GitHubPRAnalyzer {
                     }
 
                     const prLink = `[${prTitle}](${pr.url})`;
-                    const copilotType = pr.copilotAssisted ? pr.copilotType : 'none';
+                    const aiDisplay = pr.aiAssisted ? `${pr.aiTool}-${pr.aiType}` : 'none';
 
                     // Add lines of code changed info
                     let linesChanged = '';
@@ -1433,7 +1566,7 @@ export class GitHubPRAnalyzer {
                         filesChanged = pr.lineChanges.filesChanged.toString();
                     }
 
-                    textContent += `| ${week} | ${copilotType} | ${prLink} | ${linesChanged} | ${filesChanged} |\n`;
+                    textContent += `| ${week} | ${aiDisplay} | ${prLink} | ${linesChanged} | ${filesChanged} |\n`;
                 }
             }
         }

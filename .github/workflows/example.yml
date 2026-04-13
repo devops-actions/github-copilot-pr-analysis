@@ -51,7 +51,7 @@ jobs:
             http-cache-
       
       - name: Run PR analysis with charts
-        uses: devops-actions/github-copilot-pr-analysis@v0.0.5
+        uses: devops-actions/github-copilot-pr-analysis@0438ddce4697f8875d4d6b4eca03c4ef454a887b # v0.0.5
         with:
           github_token: ${{ secrets.GH_PAT }}
           output_format: ${{ inputs.output_format || 'json' }}
@@ -63,7 +63,7 @@ jobs:
           #   partial-org:include:repo1,repo2
       
       - name: Upload analysis results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: pr-analysis-results-${{ github.run_number }}

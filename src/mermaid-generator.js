@@ -874,6 +874,36 @@ export function generateSummaryStats(results) {
     if (results.totalCopilotAgentPRs !== undefined) {
         lines.push(`- **Copilot Agent PRs**: ${formatNumberMetric(results.totalCopilotAgentPRs)}`);
     }
+
+    if (results.totalClaudePRs !== undefined && results.totalClaudePRs > 0) {
+        lines.push('');
+        lines.push(`- **Claude-Assisted PRs**: ${formatNumberMetric(results.totalClaudePRs)}`);
+        if (results.totalPRs > 0) {
+            const claudePercentage = Math.round(results.totalClaudePRs / results.totalPRs * 100 * 100) / 100;
+            lines.push(`- **Overall Claude Usage**: ${formatNumberMetric(claudePercentage)}%`);
+        }
+        if (results.totalClaudeReviewPRs !== undefined) {
+            lines.push(`- **Claude Review PRs**: ${formatNumberMetric(results.totalClaudeReviewPRs)}`);
+        }
+        if (results.totalClaudeAgentPRs !== undefined) {
+            lines.push(`- **Claude Agent PRs**: ${formatNumberMetric(results.totalClaudeAgentPRs)}`);
+        }
+    }
+
+    if (results.totalCodexPRs !== undefined && results.totalCodexPRs > 0) {
+        lines.push('');
+        lines.push(`- **Codex-Assisted PRs**: ${formatNumberMetric(results.totalCodexPRs)}`);
+        if (results.totalPRs > 0) {
+            const codexPercentage = Math.round(results.totalCodexPRs / results.totalPRs * 100 * 100) / 100;
+            lines.push(`- **Overall Codex Usage**: ${formatNumberMetric(codexPercentage)}%`);
+        }
+        if (results.totalCodexReviewPRs !== undefined) {
+            lines.push(`- **Codex Review PRs**: ${formatNumberMetric(results.totalCodexReviewPRs)}`);
+        }
+        if (results.totalCodexAgentPRs !== undefined) {
+            lines.push(`- **Codex Agent PRs**: ${formatNumberMetric(results.totalCodexAgentPRs)}`);
+        }
+    }
     
     if (results.totalActionsRuns !== undefined) {
         lines.push(`- **Copilot-triggered Actions runs**: ${formatNumberMetric(results.totalActionsRuns)}`);
@@ -920,8 +950,14 @@ export function generateSummaryStats(results) {
 
 /**
  * Write content to GitHub step summary.
+ * Skips writing if OUTPUT_TO_STEP_SUMMARY is explicitly set to 'false'.
  */
 export async function writeToStepSummary(content) {
+    const outputToStepSummary = process.env.OUTPUT_TO_STEP_SUMMARY;
+    if (outputToStepSummary && outputToStepSummary.toLowerCase() === 'false') {
+        return;
+    }
+
     const stepSummaryFile = process.env.GITHUB_STEP_SUMMARY;
     if (stepSummaryFile) {
         try {

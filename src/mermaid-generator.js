@@ -949,6 +949,155 @@ export function generateSummaryStats(results) {
 }
 
 /**
+ * Determine which AI agents have at least one PR in the overall results.
+ * Returns an array of { name, total } objects, sorted by total descending.
+ */
+export function getActiveAgents(results) {
+    const agents = [
+        { name: 'GitHub Copilot', total: results.totalCopilotPRs || 0 },
+        { name: 'Claude',         total: results.totalClaudePRs  || 0 },
+        { name: 'Codex',          total: results.totalCodexPRs   || 0 },
+    ];
+    return agents.filter(a => a.total > 0).sort((a, b) => b.total - a.total);
+}
+
+/**
+ * Generate a mermaid pie chart showing the overall distribution of
+ * AI-assisted PRs by detected tool. Only includes agents with > 0 PRs.
+ */
+export function generateCodingAgentPieChart(results) {
+    const agents = getActiveAgents(results);
+    if (agents.length < 2) {
+        return 'No multi-agent data available for pie chart';
+    }
+
+    const chartLines = [];
+    chartLines.push('```mermaid');
+    chartLines.push('pie title "AI Tool Distribution (All-time)"');
+    for (const agent of agents) {
+        chartLines.push(`    "${agent.name}" : ${agent.total}`);
+    }
+    chartLines.push('```');
+
+    return chartLines.join('\n');
+}
+
+/**
+ * Generate a mermaid bar chart showing detected AI tool usage per week.
+ * Only includes weeks where at least one AI-assisted PR exists.
+ */
+export function generateCodingAgentWeeklyChart(weeklyData, results) {
+    if (!weeklyData || Object.keys(weeklyData).length === 0) {
+        return 'No data available for coding agent weekly chart';
+    }
+
+    const activeAgents = getActiveAgents(results);
+    if (activeAgents.length < 2) {
+        return 'No multi-agent data available for weekly chart';
+    }
+
+    // Sort weeks chronologically and keep only weeks with any AI-assisted PRs
+    const sortedWeeks = Object.keys(weeklyData)
+        .sort((a, b) => {
+            const [yearA, weekA] = parseWeekKey(a);
+            const [yearB, weekB] = parseWeekKey(b);
+            return yearA !== yearB ? yearA - yearB : weekA - weekB;
+        })
+        .filter(week =>
+            (weeklyData[week].copilotAssistedPRs || 0) > 0 ||
+            (weeklyData[week].claudeAssistedPRs   || 0) > 0 ||
+            (weeklyData[week].codexAssistedPRs    || 0) > 0
+        );
+
+    if (sortedWeeks.length === 0) {
+        return 'No AI-assisted PR data available for weekly chart';
+    }
+
+    const agentDataMap = {
+        'GitHub Copilot': week => weeklyData[week].copilotAssistedPRs || 0,
+        'Claude':         week => weeklyData[week].claudeAssistedPRs   || 0,
+        'Codex':          week => weeklyData[week].codexAssistedPRs    || 0,
+    };
+
+    const maxValue = Math.max(
+        ...sortedWeeks.flatMap(week =>
+            activeAgents.map(a => agentDataMap[a.name](week))
+        )
+    );
+
+    const chartLines = [];
+    chartLines.push('```mermaid');
+    chartLines.push('xychart-beta');
+    chartLines.push('    title "Detected AI Tool Usage by Week"');
+    chartLines.push('    x-axis [' + sortedWeeks.map(w => `"${formatWeekForDisplay(w)}"`).join(', ') + ']');
+    chartLines.push('    y-axis "Number of PRs" 0 --> ' + (maxValue + 2));
+
+    for (const agent of activeAgents) {
+        const values = sortedWeeks.map(w => agentDataMap[agent.name](w));
+        chartLines.push(`    bar "${agent.name}" [` + values.join(', ') + ']');
+    }
+
+    chartLines.push('```');
+
+    const legendLines = [
+        '',
+        '**Legend:**',
+        ...activeAgents.map(a => `- **${a.name}**: PRs where ${a.name} was the detected AI tool`),
+        '- *Note: each PR is attributed to one AI tool only*',
+    ];
+
+    return chartLines.concat(legendLines).join('\n');
+}
+
+/**
+ * Generate a markdown table showing the weekly breakdown of AI tool usage.
+ */
+export function generateCodingAgentDataTable(weeklyData, results) {
+    if (!weeklyData || Object.keys(weeklyData).length === 0) {
+        return 'No data available for coding agent table';
+    }
+
+    const activeAgents = getActiveAgents(results);
+    if (activeAgents.length < 2) {
+        return 'No multi-agent data available for table';
+    }
+
+    const agentDataMap = {
+        'GitHub Copilot': week => weeklyData[week].copilotAssistedPRs || 0,
+        'Claude':         week => weeklyData[week].claudeAssistedPRs   || 0,
+        'Codex':          week => weeklyData[week].codexAssistedPRs    || 0,
+    };
+
+    const sortedWeeks = Object.keys(weeklyData).sort((a, b) => {
+        const [yearA, weekA] = parseWeekKey(a);
+        const [yearB, weekB] = parseWeekKey(b);
+        return yearA !== yearB ? yearA - yearB : weekA - weekB;
+    });
+
+    const agentHeaders = activeAgents.map(a => a.name).join(' | ');
+    const agentSeps    = activeAgents.map(() => '---------').join('|');
+    const lines = [];
+    lines.push(`| Week | Total PRs | ${agentHeaders} |`);
+    lines.push(`|------|-----------|${agentSeps}|`);
+
+    for (const week of sortedWeeks) {
+        const data = weeklyData[week];
+        const totalAI = activeAgents.reduce((sum, a) => sum + agentDataMap[a.name](week), 0);
+        if (totalAI === 0) continue;
+
+        const agentCols = activeAgents.map(a => {
+            const count = agentDataMap[a.name](week);
+            const pct = totalAI > 0 ? Math.round(count / totalAI * 100) : 0;
+            return `${count} (${pct}%)`;
+        }).join(' | ');
+
+        lines.push(`| ${week} | ${data.totalPRs} | ${agentCols} |`);
+    }
+
+    return lines.join('\n');
+}
+
+/**
  * Write content to GitHub step summary.
  * Skips writing if OUTPUT_TO_STEP_SUMMARY is explicitly set to 'false'.
  */
@@ -1122,7 +1271,31 @@ export async function generateMermaidCharts() {
             await writeToStepSummary('');
             await writeToStepSummary('</details>');
         }
-        
+
+        // Generate coding agent breakdown (only when ≥ 2 different AI tools detected)
+        const activeAgents = getActiveAgents(results);
+        if (activeAgents.length >= 2) {
+            await writeToStepSummary('');
+            await writeToStepSummary('## 🤖 Detected AI Tool per PR');
+            await writeToStepSummary('');
+            await writeToStepSummary('*Each PR is attributed to the primary AI tool detected. Weeks with no AI-assisted PRs are excluded.*');
+
+            const agentPieChart = generateCodingAgentPieChart(results);
+            await writeToStepSummary(agentPieChart);
+
+            const agentWeeklyChart = generateCodingAgentWeeklyChart(weeklyData, results);
+            await writeToStepSummary('');
+            await writeToStepSummary(agentWeeklyChart);
+
+            const agentDataTable = generateCodingAgentDataTable(weeklyData, results);
+            await writeToStepSummary('<details>');
+            await writeToStepSummary('<summary>📊 AI Tool Usage Data</summary>');
+            await writeToStepSummary('');
+            await writeToStepSummary(agentDataTable);
+            await writeToStepSummary('');
+            await writeToStepSummary('</details>');
+        }
+
         console.log('Mermaid charts generated successfully!');
         
     } catch (error) {

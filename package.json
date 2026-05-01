@@ -36,7 +36,7 @@
   "devDependencies": {
     "jest": "^30.3.0",
     "eslint": "^10.2.1",
-    "@babel/preset-env": "^7.29.2",
+    "@babel/preset-env": "^7.29.3",
     "babel-jest": "^30.3.0"
   },
   "engines": {

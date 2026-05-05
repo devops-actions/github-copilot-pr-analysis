@@ -27,7 +27,40 @@ A GitHub Action that analyzes pull requests across your repositories to track Gi
 
 ## Usage
 
-### Basic Usage
+### CLI (npm package)
+
+Run directly against any GitHub organization or user without a workflow:
+
+```bash
+# Using npx (no install required)
+GH_PAT=ghp_yourtoken npx github-copilot-pr-analysis my-org
+
+# Or install globally
+npm install -g github-copilot-pr-analysis
+copilot-pr-analysis my-org --token ghp_yourtoken
+
+# Analyze a user account instead of an org
+copilot-pr-analysis rajbos --type user --token ghp_yourtoken
+
+# Analyze a single repository
+copilot-pr-analysis my-org --repo my-repo --token ghp_yourtoken
+
+# Pipe JSON output for further processing
+copilot-pr-analysis my-org --token ghp_yourtoken > results.json
+copilot-pr-analysis my-org --token ghp_yourtoken | jq '.totalPRs'
+```
+
+All progress and status messages are written to `stderr`; only the raw JSON result is written to `stdout`.
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--token, -t` | GitHub PAT (or set `GH_PAT` / `GITHUB_TOKEN` env var) | — |
+| `--repo, -r` | Analyze a single repository | all repos |
+| `--type` | Account type: `org` or `user` | `org` |
+
+### Basic Usage (GitHub Actions)
 
 Add this action to your workflow to analyze all repositories:
 

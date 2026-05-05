@@ -1,9 +1,21 @@
 {
-  "name": "github-copilot-pr-analysis",
+  "name": "@rajbos/github-copilot-pr-analysis",
   "version": "1.0.0",
-  "description": "GitHub Action to analyze GitHub PR's for Copilot usage",
+  "description": "GitHub Action and CLI to analyze GitHub PRs for Copilot usage",
   "main": "src/index.js",
+  "bin": {
+    "copilot-pr-analysis": "src/cli.js"
+  },
   "type": "module",
+  "files": [
+    "src/",
+    "README.md",
+    "LICENSE",
+    "action.yml"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/devops-actions/github-copilot-pr-analysis.git"
@@ -22,7 +34,8 @@
     "analysis",
     "copilot",
     "automation",
-    "github-actions"
+    "github-actions",
+    "cli"
   ],
   "author": "devops-actions",
   "license": "MIT",

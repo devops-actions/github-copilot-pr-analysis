@@ -55,10 +55,11 @@ export function shouldSkipRepository(repoData) {
  * GitHub Pull Request Analyzer for detecting Copilot collaboration.
  */
 export class GitHubPRAnalyzer {
-    constructor(token, owner, repo = null) {
+    constructor(token, owner, repo = null, isOrg = false) {
         this.token = token;
         this.owner = owner;
         this.repo = repo;
+        this.isOrg = isOrg;
         this.headers = {
             'Authorization': `token ${token}`,
             'Accept': 'application/vnd.github.v3+json'
@@ -276,12 +277,13 @@ export class GitHubPRAnalyzer {
         const repos = [];
         let page = 1;
         const perPage = 100;
+        const endpoint = this.isOrg ? `/orgs/${this.owner}/repos` : `/users/${this.owner}/repos`;
         
         while (true) {
             const cacheKey = `repos_${this.owner}_${page}`;
             try {
                 const response = await this._makeApiRequestWithRetry(
-                    () => this.api.get(`/users/${this.owner}/repos`, {
+                    () => this.api.get(endpoint, {
                         params: {
                             type: 'all',
                             sort: 'updated',

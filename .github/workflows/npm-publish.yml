@@ -12,11 +12,12 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # needed for npm provenance
+  id-token: write   # required for OIDC token exchange with npm
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: npm-publish   # protects publish with an optional approval gate
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@6c439dc8bdd0c9e700db98a04ae5cdcfe54855f0 # v2
@@ -38,9 +39,9 @@ jobs:
       - name: Publish to npm
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
-            npm publish --dry-run
+            npm publish --dry-run --access public
           else
-            npm publish --provenance
+            npm publish --provenance --access public
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # No NODE_AUTH_TOKEN needed - npm exchanges the GitHub OIDC token
+        # automatically when a Trusted Publisher is configured on npmjs.com

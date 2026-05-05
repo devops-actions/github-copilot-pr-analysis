@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "GitHub Action to analyze GitHub PR's for Copilot usage",
   "main": "src/index.js",
+  "bin": {
+    "copilot-pr-analysis": "src/cli.js"
+  },
   "type": "module",
   "repository": {
     "type": "git",

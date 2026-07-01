@@ -40,14 +40,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       
-      - name: Validate GitHub token
+      - name: Detect GitHub token
+        id: token_check
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
         run: |
-          if [ -z "${{ secrets.GH_PAT }}" ]; then
-            echo "::error::GH_PAT secret is not set. Please add a GitHub Personal Access Token to your repository secrets."
-            exit 1
+          if [ -n "$GH_PAT" ]; then
+            echo "token_available=true" >> "$GITHUB_OUTPUT"
+            echo "GitHub token detected. Running PR analysis."
+          else
+            echo "token_available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GH_PAT is not configured. Skipping PR analysis and running the standard Jest unit tests instead."
           fi
       
       - name: Restore HTTP cache
+        if: steps.token_check.outputs.token_available == 'true'
         uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
         with:
           path: .http_cache
@@ -56,6 +63,7 @@ jobs:
             http-cache-
       
       - name: Run PR analysis with charts
+        if: steps.token_check.outputs.token_available == 'true'
         uses: devops-actions/github-copilot-pr-analysis@a32a2170ed15148dada014bd200a9ee68f922a8c # v0.0.6
         with:
           github_token: ${{ secrets.GH_PAT }}
@@ -67,9 +75,17 @@ jobs:
           #   unwanted-org
           #   partial-org:include:repo1,repo2
       
+      - name: Install test dependencies
+        if: steps.token_check.outputs.token_available != 'true'
+        run: npm ci
+      
+      - name: Run standard test suite
+        if: steps.token_check.outputs.token_available != 'true'
+        run: node --experimental-vm-modules node_modules/jest-cli/bin/jest.js --runInBand --testPathIgnorePatterns=tests/api-retry-integration.test.js
+      
       - name: Upload analysis results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        if: always()
+        if: always() && steps.token_check.outputs.token_available == 'true'
         with:
           name: pr-analysis-results-${{ github.run_number }}
           path: report/pr_analysis_*
@@ -79,8 +95,14 @@ jobs:
         if: always()
         run: |
           {
-            echo "## Analysis Complete! 🎉"
-            echo ""
-            echo "Analysis results have been uploaded as artifacts."
-            echo "Check the charts and tables in the step summary above."
+            if [ "${{ steps.token_check.outputs.token_available }}" = "true" ]; then
+              echo "## Analysis Complete! 🎉"
+              echo ""
+              echo "Analysis results have been uploaded as artifacts."
+              echo "Check the charts and tables in the step summary above."
+            else
+              echo "## Test fallback executed"
+              echo ""
+              echo "No GH_PAT was provided, so PR analysis was skipped and the standard Jest unit tests were run instead."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

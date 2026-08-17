@@ -9,6 +9,6 @@ permissions:
   
 jobs:
   dependabot:
-    uses: devops-actions/.github/.github/workflows/approve-dependabot-pr.yml@1025096c3a41498850f3457dfec7bd1a643424ef # main
+    uses: devops-actions/.github/.github/workflows/approve-dependabot-pr.yml@72f72c4ce25d0ab32530f581be0de7e914365c29 # main
     secrets:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

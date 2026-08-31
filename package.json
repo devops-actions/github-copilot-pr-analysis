@@ -50,7 +50,7 @@
     "jest": "^30.4.2",
     "eslint": "^10.9.1",
     "@babel/preset-env": "^8.0.2",
-    "babel-jest": "^30.4.1"
+    "babel-jest": "^30.5.0"
   },
   "engines": {
     "node": ">=20.0.0"

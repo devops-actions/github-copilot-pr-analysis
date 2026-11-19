@@ -3,6 +3,7 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  workflow_call: # called from release.yml after it created the release
   workflow_dispatch:
     inputs:
       dry_run:
